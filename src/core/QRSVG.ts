@@ -234,7 +234,9 @@ export default class QRSVG {
             if (col + xOffset < 0 || row + yOffset < 0 || col + xOffset >= count || row + yOffset >= count) return false;
             if (filter && !filter(row + yOffset, col + xOffset)) return false;
             return !!this._qr && this._qr.isDark(row + yOffset, col + xOffset);
-          }
+          },
+          row,
+          col
         );
 
         if (dot._element && this._dotsClipPath) {
