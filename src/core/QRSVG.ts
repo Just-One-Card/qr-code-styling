@@ -199,7 +199,8 @@ export default class QRSVG {
     const dot = new QRDot({
       svg: this._element,
       type: options.dotsOptions.type,
-      window: this._window
+      window: this._window,
+      dotScale: (options.dotsOptions as RequiredOptions['dotsOptions']).dotScale ?? 1.0
     });
 
     this._dotsClipPath = this._window.document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
@@ -366,7 +367,8 @@ export default class QRSVG {
         const dot = new QRDot({
           svg: this._element,
           type: (options.cornersSquareOptions?.type as DotType) || options.dotsOptions.type,
-          window: this._window
+          window: this._window,
+          dotScale: (options.dotsOptions as RequiredOptions['dotsOptions']).dotScale ?? 1.0
         });
 
         for (let row = 0; row < squareMask.length; row++) {
@@ -423,7 +425,8 @@ export default class QRSVG {
         const dot = new QRDot({
           svg: this._element,
           type: (options.cornersDotOptions?.type as DotType) || options.dotsOptions.type,
-          window: this._window
+          window: this._window,
+          dotScale: (options.dotsOptions as RequiredOptions['dotsOptions']).dotScale ?? 1.0
         });
 
         for (let row = 0; row < dotMask.length; row++) {

@@ -12,12 +12,14 @@ export default class QRDot {
   _type: DotType;
   _window: Window;
   _morseLineDecisions: Map<string, LineDecision>;
+  _dotScale: number;
 
-  constructor({ svg, type, window }: { svg: SVGElement; type: DotType; window: Window }) {
+  constructor({ svg, type, window, dotScale = 1.0 }: { svg: SVGElement; type: DotType; window: Window; dotScale?: number }) {
     this._svg = svg;
     this._type = type;
     this._window = window;
     this._morseLineDecisions = new Map<string, LineDecision>();
+    this._dotScale = Math.max(0.1, Math.min(1.0, dotScale)); // Ogranicz do 0.1 - 1.0
   }
 
   draw(x: number, y: number, size: number, getNeighbor: GetNeighbor, row?: number, col?: number): void {
@@ -59,30 +61,81 @@ export default class QRDot {
     this._element?.setAttribute("transform", `rotate(${(180 * rotation) / Math.PI},${cx},${cy})`);
   }
 
+  // Pomocnicza metoda do obliczania przeskalowanych wymiarów i wyśrodkowanej pozycji
+  _getScaledDimensions(x: number, y: number, size: number): { x: number; y: number; size: number } {
+    const scaledSize = size * this._dotScale;
+    const offset = (size - scaledSize) / 2;
+    return {
+      x: x + offset,
+      y: y + offset,
+      size: scaledSize
+    };
+  }
+
   _basicDot(args: BasicFigureDrawArgs): void {
     const { size, x, y } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
 
     this._rotateFigure({
       ...args,
       draw: () => {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        this._element.setAttribute("cx", String(x + size / 2));
-        this._element.setAttribute("cy", String(y + size / 2));
-        this._element.setAttribute("r", String(size / 2));
+        this._element.setAttribute("cx", String(scaled.x + scaled.size / 2));
+        this._element.setAttribute("cy", String(scaled.y + scaled.size / 2));
+        this._element.setAttribute("r", String(scaled.size / 2));
       }
     });
   }
 
   _basicSquare(args: BasicFigureDrawArgs): void {
     const { size, x, y } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
+
+    this._rotateFigure({
+      ...args,
+      draw: () => {
+        this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        this._element.setAttribute("x", String(scaled.x));
+        this._element.setAttribute("y", String(scaled.y));
+        this._element.setAttribute("width", String(scaled.size));
+        this._element.setAttribute("height", String(scaled.size));
+      }
+    });
+  }
+
+  // Prostokąt dla środkowych elementów linii poziomej morse
+  // Pełna szerokość, przeskalowana wysokość
+  _basicRectHorizontalLine(args: BasicFigureDrawArgs): void {
+    const { size, x, y } = args;
+    const scaledSize = size * this._dotScale;
+    const offset = (size - scaledSize) / 2;
 
     this._rotateFigure({
       ...args,
       draw: () => {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "rect");
         this._element.setAttribute("x", String(x));
-        this._element.setAttribute("y", String(y));
+        this._element.setAttribute("y", String(y + offset));
         this._element.setAttribute("width", String(size));
+        this._element.setAttribute("height", String(scaledSize));
+      }
+    });
+  }
+
+  // Prostokąt dla środkowych elementów linii pionowej morse
+  // Pełna wysokość, przeskalowana szerokość
+  _basicRectVerticalLine(args: BasicFigureDrawArgs): void {
+    const { size, x, y } = args;
+    const scaledSize = size * this._dotScale;
+    const offset = (size - scaledSize) / 2;
+
+    this._rotateFigure({
+      ...args,
+      draw: () => {
+        this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        this._element.setAttribute("x", String(x + offset));
+        this._element.setAttribute("y", String(y));
+        this._element.setAttribute("width", String(scaledSize));
         this._element.setAttribute("height", String(size));
       }
     });
@@ -91,6 +144,7 @@ export default class QRDot {
   //if rotation === 0 - right side is rounded
   _basicSideRounded(args: BasicFigureDrawArgs): void {
     const { size, x, y } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
 
     this._rotateFigure({
       ...args,
@@ -98,10 +152,10 @@ export default class QRDot {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
         this._element.setAttribute(
           "d",
-          `M ${x} ${y}` + //go to top left position
-            `v ${size}` + //draw line to left bottom corner
-            `h ${size / 2}` + //draw line to left bottom corner + half of size right
-            `a ${size / 2} ${size / 2}, 0, 0, 0, 0 ${-size}` // draw rounded corner
+          `M ${scaled.x} ${scaled.y}` +
+            `v ${scaled.size}` +
+            `h ${scaled.size / 2}` +
+            `a ${scaled.size / 2} ${scaled.size / 2}, 0, 0, 0, 0 ${-scaled.size}`
         );
       }
     });
@@ -110,6 +164,7 @@ export default class QRDot {
   //if rotation === 0 - top right corner is rounded
   _basicCornerRounded(args: BasicFigureDrawArgs): void {
     const { size, x, y } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
 
     this._rotateFigure({
       ...args,
@@ -117,11 +172,11 @@ export default class QRDot {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
         this._element.setAttribute(
           "d",
-          `M ${x} ${y}` + //go to top left position
-            `v ${size}` + //draw line to left bottom corner
-            `h ${size}` + //draw line to right bottom corner
-            `v ${-size / 2}` + //draw line to right bottom corner + half of size top
-            `a ${size / 2} ${size / 2}, 0, 0, 0, ${-size / 2} ${-size / 2}` // draw rounded corner
+          `M ${scaled.x} ${scaled.y}` +
+            `v ${scaled.size}` +
+            `h ${scaled.size}` +
+            `v ${-scaled.size / 2}` +
+            `a ${scaled.size / 2} ${scaled.size / 2}, 0, 0, 0, ${-scaled.size / 2} ${-scaled.size / 2}`
         );
       }
     });
@@ -130,6 +185,7 @@ export default class QRDot {
   //if rotation === 0 - top right corner is rounded
   _basicCornerExtraRounded(args: BasicFigureDrawArgs): void {
     const { size, x, y } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
 
     this._rotateFigure({
       ...args,
@@ -137,10 +193,10 @@ export default class QRDot {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
         this._element.setAttribute(
           "d",
-          `M ${x} ${y}` + //go to top left position
-            `v ${size}` + //draw line to left bottom corner
-            `h ${size}` + //draw line to right bottom corner
-            `a ${size} ${size}, 0, 0, 0, ${-size} ${-size}` // draw rounded top right corner
+          `M ${scaled.x} ${scaled.y}` +
+            `v ${scaled.size}` +
+            `h ${scaled.size}` +
+            `a ${scaled.size} ${scaled.size}, 0, 0, 0, ${-scaled.size} ${-scaled.size}`
         );
       }
     });
@@ -149,6 +205,7 @@ export default class QRDot {
   //if rotation === 0 - left bottom and right top corners are rounded
   _basicCornersRounded(args: BasicFigureDrawArgs): void {
     const { size, x, y } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
 
     this._rotateFigure({
       ...args,
@@ -156,12 +213,12 @@ export default class QRDot {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
         this._element.setAttribute(
           "d",
-          `M ${x} ${y}` + //go to left top position
-            `v ${size / 2}` + //draw line to left top corner + half of size bottom
-            `a ${size / 2} ${size / 2}, 0, 0, 0, ${size / 2} ${size / 2}` + // draw rounded left bottom corner
-            `h ${size / 2}` + //draw line to right bottom corner
-            `v ${-size / 2}` + //draw line to right bottom corner + half of size top
-            `a ${size / 2} ${size / 2}, 0, 0, 0, ${-size / 2} ${-size / 2}` // draw rounded right top corner
+          `M ${scaled.x} ${scaled.y}` +
+            `v ${scaled.size / 2}` +
+            `a ${scaled.size / 2} ${scaled.size / 2}, 0, 0, 0, ${scaled.size / 2} ${scaled.size / 2}` +
+            `h ${scaled.size / 2}` +
+            `v ${-scaled.size / 2}` +
+            `a ${scaled.size / 2} ${scaled.size / 2}, 0, 0, 0, ${-scaled.size / 2} ${-scaled.size / 2}`
         );
       }
     });
@@ -175,44 +232,193 @@ export default class QRDot {
     bottomRight?: number;
   }): void {
     const { size, x, y, topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0 } = args;
+    const scaled = this._getScaledDimensions(x, y, size);
+
+    // Promienie są już obliczone na podstawie nieprzeskalowanego rozmiaru,
+    // więc musimy je przeskalować proporcjonalnie
+    const scale = this._dotScale;
+    const scaledTopLeft = topLeft * scale;
+    const scaledTopRight = topRight * scale;
+    const scaledBottomLeft = bottomLeft * scale;
+    const scaledBottomRight = bottomRight * scale;
 
     this._rotateFigure({
       ...args,
       draw: () => {
         this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
 
-        let d = `M ${x + topLeft} ${y}`;
+        let d = `M ${scaled.x + scaledTopLeft} ${scaled.y}`;
 
         // Top edge
-        d += ` h ${size - topLeft - topRight}`;
+        d += ` h ${scaled.size - scaledTopLeft - scaledTopRight}`;
 
         // Top right corner
-        if (topRight > 0) {
-          d += ` a ${topRight} ${topRight}, 0, 0, 1, ${topRight} ${topRight}`;
+        if (scaledTopRight > 0) {
+          d += ` a ${scaledTopRight} ${scaledTopRight}, 0, 0, 1, ${scaledTopRight} ${scaledTopRight}`;
         }
 
         // Right edge
-        d += ` v ${size - topRight - bottomRight}`;
+        d += ` v ${scaled.size - scaledTopRight - scaledBottomRight}`;
 
         // Bottom right corner
-        if (bottomRight > 0) {
-          d += ` a ${bottomRight} ${bottomRight}, 0, 0, 1, ${-bottomRight} ${bottomRight}`;
+        if (scaledBottomRight > 0) {
+          d += ` a ${scaledBottomRight} ${scaledBottomRight}, 0, 0, 1, ${-scaledBottomRight} ${scaledBottomRight}`;
         }
 
         // Bottom edge
-        d += ` h ${-(size - bottomLeft - bottomRight)}`;
+        d += ` h ${-(scaled.size - scaledBottomLeft - scaledBottomRight)}`;
 
         // Bottom left corner
-        if (bottomLeft > 0) {
-          d += ` a ${bottomLeft} ${bottomLeft}, 0, 0, 1, ${-bottomLeft} ${-bottomLeft}`;
+        if (scaledBottomLeft > 0) {
+          d += ` a ${scaledBottomLeft} ${scaledBottomLeft}, 0, 0, 1, ${-scaledBottomLeft} ${-scaledBottomLeft}`;
         }
 
         // Left edge
-        d += ` v ${-(size - topLeft - bottomLeft)}`;
+        d += ` v ${-(scaled.size - scaledTopLeft - scaledBottomLeft)}`;
 
         // Top left corner
-        if (topLeft > 0) {
-          d += ` a ${topLeft} ${topLeft}, 0, 0, 1, ${topLeft} ${-topLeft}`;
+        if (scaledTopLeft > 0) {
+          d += ` a ${scaledTopLeft} ${scaledTopLeft}, 0, 0, 1, ${scaledTopLeft} ${-scaledTopLeft}`;
+        }
+
+        d += ` z`;
+
+        this._element.setAttribute("d", d);
+      }
+    });
+  }
+
+  // Zaokrąglony prostokąt dla elementów granicznych linii poziomej morse
+  // Rozciąga się do pełnej szerokości w odpowiednią stronę
+  _basicRoundedRectMorseHorizontal(args: BasicFigureDrawArgs & {
+    topLeft?: number;
+    topRight?: number;
+    bottomLeft?: number;
+    bottomRight?: number;
+    extendRight?: boolean;
+  }): void {
+    const { size, x, y, topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0, extendRight = false } = args;
+
+    const scaledSize = size * this._dotScale;
+    const offset = (size - scaledSize) / 2;
+
+    const scale = this._dotScale;
+    const scaledTopLeft = topLeft * scale;
+    const scaledTopRight = topRight * scale;
+    const scaledBottomLeft = bottomLeft * scale;
+    const scaledBottomRight = bottomRight * scale;
+
+    this._rotateFigure({
+      ...args,
+      draw: () => {
+        this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+        const startX = extendRight ? x + offset : x;
+        const startY = y + offset;
+        const width = extendRight ? size - offset : size - offset;
+
+        let d = `M ${startX + scaledTopLeft} ${startY}`;
+
+        // Top edge
+        d += ` h ${width - scaledTopLeft - scaledTopRight}`;
+
+        // Top right corner
+        if (scaledTopRight > 0) {
+          d += ` a ${scaledTopRight} ${scaledTopRight}, 0, 0, 1, ${scaledTopRight} ${scaledTopRight}`;
+        }
+
+        // Right edge
+        d += ` v ${scaledSize - scaledTopRight - scaledBottomRight}`;
+
+        // Bottom right corner
+        if (scaledBottomRight > 0) {
+          d += ` a ${scaledBottomRight} ${scaledBottomRight}, 0, 0, 1, ${-scaledBottomRight} ${scaledBottomRight}`;
+        }
+
+        // Bottom edge
+        d += ` h ${-(width - scaledBottomLeft - scaledBottomRight)}`;
+
+        // Bottom left corner
+        if (scaledBottomLeft > 0) {
+          d += ` a ${scaledBottomLeft} ${scaledBottomLeft}, 0, 0, 1, ${-scaledBottomLeft} ${-scaledBottomLeft}`;
+        }
+
+        // Left edge
+        d += ` v ${-(scaledSize - scaledTopLeft - scaledBottomLeft)}`;
+
+        // Top left corner
+        if (scaledTopLeft > 0) {
+          d += ` a ${scaledTopLeft} ${scaledTopLeft}, 0, 0, 1, ${scaledTopLeft} ${-scaledTopLeft}`;
+        }
+
+        d += ` z`;
+
+        this._element.setAttribute("d", d);
+      }
+    });
+  }
+
+  // Zaokrąglony prostokąt dla elementów granicznych linii pionowej morse
+  // Rozciąga się do pełnej wysokości w odpowiednią stronę
+  _basicRoundedRectMorseVertical(args: BasicFigureDrawArgs & {
+    topLeft?: number;
+    topRight?: number;
+    bottomLeft?: number;
+    bottomRight?: number;
+    extendDown?: boolean;
+  }): void {
+    const { size, x, y, topLeft = 0, topRight = 0, bottomLeft = 0, bottomRight = 0, extendDown = false } = args;
+
+    const scaledSize = size * this._dotScale;
+    const offset = (size - scaledSize) / 2;
+
+    const scale = this._dotScale;
+    const scaledTopLeft = topLeft * scale;
+    const scaledTopRight = topRight * scale;
+    const scaledBottomLeft = bottomLeft * scale;
+    const scaledBottomRight = bottomRight * scale;
+
+    this._rotateFigure({
+      ...args,
+      draw: () => {
+        this._element = this._window.document.createElementNS("http://www.w3.org/2000/svg", "path");
+
+        const startX = x + offset;
+        const startY = extendDown ? y + offset : y;
+        const height = extendDown ? size - offset : size - offset;
+
+        let d = `M ${startX + scaledTopLeft} ${startY}`;
+
+        // Top edge
+        d += ` h ${scaledSize - scaledTopLeft - scaledTopRight}`;
+
+        // Top right corner
+        if (scaledTopRight > 0) {
+          d += ` a ${scaledTopRight} ${scaledTopRight}, 0, 0, 1, ${scaledTopRight} ${scaledTopRight}`;
+        }
+
+        // Right edge
+        d += ` v ${height - scaledTopRight - scaledBottomRight}`;
+
+        // Bottom right corner
+        if (scaledBottomRight > 0) {
+          d += ` a ${scaledBottomRight} ${scaledBottomRight}, 0, 0, 1, ${-scaledBottomRight} ${scaledBottomRight}`;
+        }
+
+        // Bottom edge
+        d += ` h ${-(scaledSize - scaledBottomLeft - scaledBottomRight)}`;
+
+        // Bottom left corner
+        if (scaledBottomLeft > 0) {
+          d += ` a ${scaledBottomLeft} ${scaledBottomLeft}, 0, 0, 1, ${-scaledBottomLeft} ${-scaledBottomLeft}`;
+        }
+
+        // Left edge
+        d += ` v ${-(height - scaledTopLeft - scaledBottomLeft)}`;
+
+        // Top left corner
+        if (scaledTopLeft > 0) {
+          d += ` a ${scaledTopLeft} ${scaledTopLeft}, 0, 0, 1, ${scaledTopLeft} ${-scaledTopLeft}`;
         }
 
         d += ` z`;
@@ -536,16 +742,20 @@ export default class QRDot {
       return;
     }
 
-    // Środkowe elementy nie mają zaokrągleń
+    // Środkowe elementy - użyj odpowiedniej metody w zależności od kierunku
     if (decision.position === 'middle') {
-      this._basicSquare({ x, y, size, rotation: 0 });
+      if (decision.direction === 'horizontal') {
+        this._basicRectHorizontalLine({ x, y, size, rotation: 0 });
+      } else {
+        this._basicRectVerticalLine({ x, y, size, rotation: 0 });
+      }
       return;
     }
 
     if (decision.direction === 'horizontal') {
       if (decision.position === 'start') {
-        // Początek linii poziomej - zaokrąglij lewą stronę
-        this._basicRoundedRect({
+        // Początek linii poziomej - zaokrąglij lewą stronę, rozciągnij w prawo
+        this._basicRoundedRectMorseHorizontal({
           x,
           y,
           size,
@@ -553,11 +763,12 @@ export default class QRDot {
           topLeft: radius,
           bottomLeft: radius,
           topRight: 0,
-          bottomRight: 0
+          bottomRight: 0,
+          extendRight: true
         });
       } else {
-        // Koniec linii poziomej - zaokrąglij prawą stronę
-        this._basicRoundedRect({
+        // Koniec linii poziomej - zaokrąglij prawą stronę, rozciągnij w lewo
+        this._basicRoundedRectMorseHorizontal({
           x,
           y,
           size,
@@ -565,7 +776,8 @@ export default class QRDot {
           topLeft: 0,
           bottomLeft: 0,
           topRight: radius,
-          bottomRight: radius
+          bottomRight: radius,
+          extendRight: false
         });
       }
       return;
@@ -573,8 +785,8 @@ export default class QRDot {
 
     // vertical
     if (decision.position === 'start') {
-      // Początek linii pionowej - zaokrąglij górną stronę
-      this._basicRoundedRect({
+      // Początek linii pionowej - zaokrąglij górną stronę, rozciągnij w dół
+      this._basicRoundedRectMorseVertical({
         x,
         y,
         size,
@@ -582,11 +794,12 @@ export default class QRDot {
         topLeft: radius,
         topRight: radius,
         bottomLeft: 0,
-        bottomRight: 0
+        bottomRight: 0,
+        extendDown: true
       });
     } else {
-      // Koniec linii pionowej - zaokrąglij dolną stronę
-      this._basicRoundedRect({
+      // Koniec linii pionowej - zaokrąglij dolną stronę, rozciągnij w górę
+      this._basicRoundedRectMorseVertical({
         x,
         y,
         size,
@@ -594,7 +807,8 @@ export default class QRDot {
         topLeft: 0,
         topRight: 0,
         bottomLeft: radius,
-        bottomRight: radius
+        bottomRight: radius,
+        extendDown: false
       });
     }
   }

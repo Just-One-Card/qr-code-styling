@@ -135,6 +135,7 @@ export type Options = {
     color?: string;
     gradient?: Gradient;
     roundSize?: boolean;
+    dotScale?: number; // Skala rozmiaru kropek (0.0 - 1.0), domyślnie 1.0
   };
   cornersSquareOptions?: {
     type?: CornerSquareType;
